@@ -5,6 +5,7 @@ import hypothesis.extra.numpy as npst
 import numpy as np
 import chromadb.api.types as types
 import re
+import hashlib
 
 # Set the random seed for reproducibility
 np.random.seed(0)
@@ -21,6 +22,20 @@ collection_metadata = st.one_of(
         ),
     ),
 )
+
+class hashing_embedding_function(types.EmbeddingFunction):
+    def __init__(self):
+        return
+
+    def __call__(self, texts: types.Documents) -> types.Embeddings:
+        # Hash the text to get a unique embedding
+        hashed_texts =  [hashlib.sha256(text.encode("utf-8")).hexdigest() for text in texts]ß
+
+        # Convert the hashes into arrays of floats
+        return [list(map(float, list(hashed_text))) for hashed_text in hashed_texts]
+    
+collection_embedding_function = st.one_of(
+    st.none(), st.just(hashing_embedding_function()))
 
 # TODO: build a strategy that constructs english sentences instead of gibberish strings
 
@@ -48,6 +63,7 @@ class EmbeddingSet(TypedDict):
 class Collection(TypedDict):
     name: str
     metadata: Optional[types.Metadata]
+    embedding_function: Optional[types.EmbeddingFunction]
 
 
 @st.composite
@@ -64,7 +80,11 @@ def collection_name(draw) -> Collection:
 @st.composite
 def collections(draw) -> Collection:
     """Strategy to generate a set of collections"""
-    return {"name": draw(collection_name()), "metadata": draw(collection_metadata)}
+    return {
+        "name": draw(collection_name()),
+        "metadata": draw(collection_metadata),
+        "embedding_function": draw(collection_embedding_function),
+    }
 
 
 def one_or_both(strategy_a, strategy_b):
@@ -140,6 +160,7 @@ def metadatas_strategy(count: int) -> st.SearchStrategy[Optional[List[types.Meta
 
 
 default_id_st = st.text(alphabet=legal_id_characters, min_size=1, max_size=64)
+
 
 @st.composite
 def embedding_set(
